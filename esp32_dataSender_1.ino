@@ -1,10 +1,10 @@
 #include <Arduino.h>
-#include <ESP8266WiFi.h>
-#include <ESPAsyncTCP.h>
+#include <WiFi.h>
+#include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
 
-const char* ssid = "EBB_AP";
+const char* ssid = "ESP32-Access-Point";
 const char* password = "123456789";
 
 AsyncWebServer server(80);
