@@ -1,0 +1,7 @@
+ESP32 pinout:
+
+entry 0x400805f0
+MOSI: 23
+MISO: 19
+SCK: 18
+SS: 5
