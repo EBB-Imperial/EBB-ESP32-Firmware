@@ -8,6 +8,8 @@
 #define RXD2 16
 #define TXD2 17
 
+#define UART_BAUD 1000000
+
 const char* ssid = "EBB_esp32_v1_AP";
 const char* password = "EBBBBBBB";
 
@@ -20,13 +22,18 @@ void onWebSocketEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsE
     Serial.println("WebSocket client connected");
   } else if (type == WS_EVT_DISCONNECT) {
     Serial.println("WebSocket client disconnected");
+  } else if (type == WS_EVT_DATA) {
+    // If any data is received, write it out to the serial
+    for(size_t i=0; i<len; i++) {
+      Serial2.write(data[i]);
+    }
   }
 }
 
 void setup()
 {
-  Serial.begin(115200);
-  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
+  Serial.begin(UART_BAUD);
+  Serial2.begin(UART_BAUD, SERIAL_8N1, RXD2, TXD2);
   Serial.println("UART Initialized");
   
   WiFi.softAP(ssid, password);
@@ -51,6 +58,10 @@ void loop()
             Serial.println();
         }
 
-        ws.textAll(String(c));
+        // create a uint8_t array with a single element
+        uint8_t binaryData[1] = {(uint8_t)c};
+
+        // send the binary data to all connected clients
+        ws.binaryAll(binaryData, sizeof(binaryData));
     }
 }
