@@ -1,7 +1,7 @@
 import time
 import os
 import PIL.Image as Image
-import threading
+from threading import Thread
 
 class ImageDecoder:
 
@@ -19,19 +19,14 @@ class ImageDecoder:
         if self.DELETE_OLD_IMAGES:
             self.delete_old_images()
 
-        self.receiver =receiver
-        self.receiver.start()
-
+        self.receiver = receiver
         self.data_stream = self.receiver.get_data_stream()
 
-        # threading support
-        self.thread = None
-        self.stop_event = threading.Event()
+        self.thread = Thread(target=self.start_decode)
+        self.is_stopped = False
 
     def start(self):
-        self.thread = threading.Thread(target=self.start_decode, args=())
         self.thread.start()
-        return self
 
     @staticmethod
     def rgb565_to_rgb888(data):
@@ -79,6 +74,8 @@ class ImageDecoder:
     def start_decode(self):
         raw_img_pixels = []
         for data in self.data_stream:
+            if self.is_stopped:
+                break
             sync_word_index = data.find(self.SYNC_WORD)
             if sync_word_index == -1:
                 raw_img_pixels += data
@@ -90,8 +87,16 @@ class ImageDecoder:
             raw_img_pixels = []
 
     def stop(self):
-        self.receiver.stop()
-        self.stop_event.set()
-        self.thread.join()
+        self.is_stopped = True
         if self.LOG_LEVEL > 0:
-            print("image decoder: thread stopped")
+            print("image decoder: stopping thread...")
+        self.thread.join(1)
+        if self.thread.is_alive:
+            # force exit
+            if self.LOG_LEVEL > 0:
+                print("image decoder: thread terminated.")
+                print("image decoder: forcing thread to terminate.")
+            # doesn't work really, since the thread is blocked by the socket
+            exit(1)
+        if self.LOG_LEVEL > 0:
+            print("image decoder: thread terminated.")

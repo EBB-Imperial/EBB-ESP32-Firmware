@@ -2,20 +2,23 @@ import socket
 from multiprocessing import Process, Queue, freeze_support
 
 class UDPReceiver:
-    def __init__(self, ip="", port=1234):
+    def __init__(self, ip="", port=1234, log_level = 1):
         self.ip = ip
         self.port = port
         self.queue = Queue()
         self.process = Process(target=self.run)
         self.socket = socket.socket(socket.AF_INET, # Internet
                                 socket.SOCK_DGRAM)
+        self.log_level = log_level
 
     def start(self):
         self.process.start()
         freeze_support()    # allow current process to finish bootstrapping
 
     def stop(self):
+        if (self.log_level > 0): print("receiver.py: stopping process...")
         self.process.terminate()
+        if (self.log_level): print("receiver.py: process terminated.")
 
     def run(self):
         self.socket.bind((self.ip, self.port))
@@ -30,9 +33,6 @@ class UDPReceiver:
         while True:
             while not self.queue.empty():
                 yield self.queue.get()
-
-    def send_data(self, data):
-        self.socket.sendto(data, (self.ip, self.port))
 
 
 if __name__ == "__main__":
