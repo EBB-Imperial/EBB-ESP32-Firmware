@@ -7,6 +7,8 @@ class UDPReceiver:
         self.port = port
         self.queue = Queue()
         self.process = Process(target=self.run)
+        self.socket = socket.socket(socket.AF_INET, # Internet
+                                socket.SOCK_DGRAM)
 
     def start(self):
         self.process.start()
@@ -16,13 +18,11 @@ class UDPReceiver:
         self.process.terminate()
 
     def run(self):
-        sock = socket.socket(socket.AF_INET, # Internet
-                             socket.SOCK_DGRAM) # UDP
-        sock.bind((self.ip, self.port))
+        self.socket.bind((self.ip, self.port))
 
         while True:
             #print("receiving data: ", end="")
-            data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
+            data, addr = self.socket.recvfrom(1024) # buffer size is 1024 bytes
             #print(data)
             self.queue.put(data)
 
@@ -30,6 +30,9 @@ class UDPReceiver:
         while True:
             while not self.queue.empty():
                 yield self.queue.get()
+
+    def send_data(self, data):
+        self.socket.sendto(data, (self.ip, self.port))
 
 
 if __name__ == "__main__":

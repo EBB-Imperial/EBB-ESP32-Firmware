@@ -1,125 +1,97 @@
 import time
 import os
 import PIL.Image as Image
+import threading
 
-from PC_receiver_v2 import UDPReceiver
-from PC_input_simulator import UDPReceiverSimulator
+class ImageDecoder:
 
-IMG_WIDTH = 320
-IMG_HEIGHT = 235
+    def __init__(self, receiver, img_width=320, img_height=235, img_folder="images",
+                 sync_word=b"UUUUUUUUUUUUUUUw", use_sim_input=False, delete_old_images=True, log_level=1):
 
-# Sync word: ASCII UUUUUUUUUUUUUUUw, i.e. ([0x55] * 15) + [0x77]
-SYNC_WORD = b"UUUUUUUUUUUUUUUw"
+        self.IMG_WIDTH = img_width
+        self.IMG_HEIGHT = img_height
+        self.SYNC_WORD = sync_word
+        self.IMG_FOLDER = img_folder
+        self.USE_SIM_INPUT = use_sim_input
+        self.DELETE_OLD_IMAGES = delete_old_images
+        self.LOG_LEVEL = log_level
 
-IMG_FOLDER = "images"
+        if self.DELETE_OLD_IMAGES:
+            self.delete_old_images()
 
-USE_SIM_INPUT = True    # if set to true, use input stream from UDPReceiverSimulator
+        self.receiver =receiver
+        self.receiver.start()
 
-DELETE_OLD_IMAGES = True    # if set to true, delete all images in the image folder before starting
+        self.data_stream = self.receiver.get_data_stream()
 
-def rgb565_to_rgb888(data):
-    r = (data & 0xF800) >> 11
-    g = (data & 0x07E0) >> 5
-    b = (data & 0x001F)
-    return (min(r << 3, 255), min(g << 2, 255), min(b << 3, 255))
+        # threading support
+        self.thread = None
+        self.stop_event = threading.Event()
 
+    def start(self):
+        self.thread = threading.Thread(target=self.start_decode, args=())
+        self.thread.start()
+        return self
 
-def process_byte(data):
-    # convert from RGB565 to RGB888
-    data = int.from_bytes(data, byteorder="little")
-    data = rgb565_to_rgb888(data)
+    @staticmethod
+    def rgb565_to_rgb888(data):
+        r = (data & 0xF800) >> 11
+        g = (data & 0x07E0) >> 5
+        b = (data & 0x001F)
+        return (min(r << 3, 255), min(g << 2, 255), min(b << 3, 255))
 
-    return data
+    @staticmethod
+    def process_byte(data):
+        data = int.from_bytes(data, byteorder="little")
+        return ImageDecoder.rgb565_to_rgb888(data)
 
+    def pixels_to_image(self, pixels):
+        pixels = bytes([px for rgb in pixels for px in rgb])
+        pixels += bytes([0] * (self.IMG_WIDTH * self.IMG_HEIGHT * 3 - len(pixels)))
+        if len(pixels) != self.IMG_WIDTH * self.IMG_HEIGHT * 3:
+            pixels = pixels[:self.IMG_WIDTH * self.IMG_HEIGHT * 3]
+        return Image.frombytes("RGB", (self.IMG_WIDTH, self.IMG_HEIGHT), pixels)
 
-def pixels_to_image(pixels):
-    # flatten list of tuples and convert it to bytes
-    pixels = bytes([px for rgb in pixels for px in rgb])
-    # print the length of the pixels
-    print("pixels length: ", len(pixels), "expected length: ", IMG_WIDTH * IMG_HEIGHT * 3)
-    # since we are using UDP, we might receive more or less data than expected.
-    # we need to pad the data to the expected size
-    pixels += bytes([0] * (IMG_WIDTH * IMG_HEIGHT * 3 - len(pixels)))
-    if len(pixels) != IMG_WIDTH * IMG_HEIGHT * 3:
-        # truncate the data if it is too long
-        pixels = pixels[:IMG_WIDTH * IMG_HEIGHT * 3]
-    
-    return Image.frombytes("RGB", (IMG_WIDTH, IMG_HEIGHT), pixels)
+    def delete_old_images(self):
+        for filename in os.listdir(self.IMG_FOLDER):
+            file_path = os.path.join(self.IMG_FOLDER, filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(e)
 
+    def save_image(self, img, filename):
+        image_path = os.path.join(self.IMG_FOLDER, filename)
+        if os.path.exists(image_path):
+            i = 1
+            while True:
+                new_filename = filename.split(".")[0] + "_" + str(i) + "." + filename.split(".")[1]
+                new_image_path = os.path.join(self.IMG_FOLDER, new_filename)
+                if not os.path.exists(new_image_path):
+                    image_path = new_image_path
+                    break
+                i += 1
+        img.save(image_path)
+        if self.LOG_LEVEL > 0:
+            print("image decoder: saved new image: " + image_path)
 
-
-def delete_old_images():
-    for filename in os.listdir(IMG_FOLDER):
-        file_path = os.path.join(IMG_FOLDER, filename)
-        try:
-            if os.path.isfile(file_path):
-                os.unlink(file_path)
-        except Exception as e:
-            print(e)
-
-
-def save_image(img, filename):
-    image_path = os.path.join(IMG_FOLDER, filename)
-    # if file already exists, append a number to the filename
-    if os.path.exists(image_path):
-        i = 1
-        while True:
-            new_filename = filename.split(".")[0] + "_" + str(i) + "." + filename.split(".")[1]
-            new_image_path = os.path.join(IMG_FOLDER, new_filename)
-            if not os.path.exists(new_image_path):
-                image_path = new_image_path
-                break
-            i += 1
-    img.save(image_path)
-    print("saved new image: " + image_path)
-
-
-if __name__ == "__main__":
-
-    if DELETE_OLD_IMAGES:
-        delete_old_images()
-
-    if USE_SIM_INPUT:
-        receiver = UDPReceiverSimulator()
-    else:
-        receiver = UDPReceiver()
-        receiver.start()
-
-    data_stream = receiver.get_data_stream()
-
-    raw_img_pixels = []
-
-    for data in data_stream:
-        #print("New data: ", data)
-
-        # find the sync word
-        sync_word_index = data.find(SYNC_WORD)
-
-        # if the sync word is not found, append the data to the previous data
-        if sync_word_index == -1:
-            raw_img_pixels += data
-            continue
-    
-        # if the sync word is found, append the data after the sync word to the previous data
-        raw_img_pixels += data[sync_word_index + len(SYNC_WORD):]
-
-        # each pixel is 2 bytes, we iterate and process 2 bytes at a time
-        img_pixels = []
-        print("raw_img_pixels length: ", len(raw_img_pixels), "expected length: ", IMG_WIDTH * IMG_HEIGHT * 2)
-        for i in range(0, len(raw_img_pixels), 2):
-            img_pixels.append(process_byte(raw_img_pixels[i:i+2]))
-        print("img_pixels length: ", len(img_pixels), "expected length: ", IMG_WIDTH * IMG_HEIGHT * 3)
-        print()
-        
-        # convert the pixels to an image
-        img = pixels_to_image(img_pixels)
-
-        # save the image, filename is the current timestamp
-        save_image(img, str(int(time.time())) + ".jpg")
-
-        # clear the raw image pixels
+    def start_decode(self):
         raw_img_pixels = []
+        for data in self.data_stream:
+            sync_word_index = data.find(self.SYNC_WORD)
+            if sync_word_index == -1:
+                raw_img_pixels += data
+                continue
+            raw_img_pixels += data[sync_word_index + len(self.SYNC_WORD):]
+            img_pixels = [self.process_byte(raw_img_pixels[i:i+2]) for i in range(0, len(raw_img_pixels), 2)]
+            img = self.pixels_to_image(img_pixels)
+            self.save_image(img, str(int(time.time())) + ".jpg")
+            raw_img_pixels = []
 
-
-    # When you're done:
-    receiver.stop()
+    def stop(self):
+        self.receiver.stop()
+        self.stop_event.set()
+        self.thread.join()
+        if self.LOG_LEVEL > 0:
+            print("image decoder: thread stopped")

@@ -7,11 +7,14 @@ RECORD_SIZE_LIMIT = 1024 * 1024  # e.g. 1MB
 RECORDED_DATA_PATH = "recorded_bytes.txt"
 
 class UDPReceiverSimulator:
-    def __init__(self, record_size_limit=RECORD_SIZE_LIMIT):
-        self.receiver = UDPReceiver()
-        self.receiver.start()
+    def __init__(self, ip = "", port = 1024, record_size_limit=RECORD_SIZE_LIMIT):
+        self.receiver = UDPReceiver(ip, port)
+        #self.receiver.start()
         self.record_size_limit = record_size_limit
         self.recorded_bytes = io.BytesIO()
+
+    def start(self):
+        self.receiver.start()
 
     def record(self):
         total_received = 0
@@ -52,6 +55,7 @@ def convert_recorded_data_to_readable(filename):
 
 if __name__ == "__main__":
     # simulator = UDPReceiverSimulator()
+    # simulator.start()
     # simulator.record()
     # simulator.save_recorded_data(RECORDED_DATA_PATH)
     # # data = simulator.get_data_stream()
