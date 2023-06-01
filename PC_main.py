@@ -3,6 +3,7 @@ from PC_receiver_v2 import UDPReceiver
 from PC_sender_v2 import UDPSender
 from PC_input_simulator import UDPReceiverSimulator
 from PC_image_decoder import ImageDecoder
+from PC_websocket_client import WebSocketClient
 
 import time
 
@@ -17,18 +18,24 @@ import time
 """
 
 # ------------------- hyper parameters ------------------- #
-USE_SIM_INPUT = False
+LOG_LEVEL = 1
+
+# image decoder
+USE_SIM_INPUT = True
 DELETE_OLD_IMAGES = True
 IMG_FOLDER = "images"
 IMG_WIDTH = 320
 IMG_HEIGHT = 235
 SYNC_WORD = b"UUUUUUUUUUUUUUUw"
-LOG_LEVEL = 1
 
+# URAT receiver
 ESP_IP = "192.168.4.1"  # sending ip
 ESP_PORT = 1234         # sending port
 UDP_IP = ""             # receiving ip (currently set to boardcast)
 UDP_PORT = ESP_PORT     # receiving port
+
+# websocket client
+LOCAL_SERVER_URL = "ws://localhost:8080/"
 # -------------------------------------------------------- #
 
 
@@ -45,10 +52,12 @@ def main():
     
     sender = UDPSender(dst_ip=ESP_IP, dst_port=ESP_PORT, log_level=LOG_LEVEL, test_mode=USE_SIM_INPUT)
 
+    socket_client = WebSocketClient(url=LOCAL_SERVER_URL, log_level=LOG_LEVEL)
+
     receiver.start()
     decoder.start()
+    socket_client.start()
 
-    print("URAT receiver initilized.")
 
     try:
         # Main loop
@@ -64,6 +73,7 @@ def main():
     # Clean up, stop the threads when done
     receiver.stop()
     decoder.stop()
+    socket_client.close()
 
 
 if __name__ == "__main__":

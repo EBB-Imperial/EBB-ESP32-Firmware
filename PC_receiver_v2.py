@@ -13,6 +13,7 @@ class UDPReceiver:
 
     def start(self):
         self.process.start()
+        if (self.log_level > 0): print("receiver.py: URAT process started.")
         freeze_support()    # allow current process to finish bootstrapping
 
     def stop(self):
