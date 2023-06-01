@@ -5,7 +5,7 @@ import time
 class WebSocketClient:
 
     def __init__(self, url = "ws://localhost:8080/", log_level=1):
-        websocket.enableTrace(True)
+        #websocket.enableTrace(True)
         self.ws = websocket.WebSocketApp(url,
                                          on_open = self.on_open,
                                          on_message = self.on_message,
@@ -52,10 +52,10 @@ class WebSocketClient:
             print("PC_websocket_server.py: Connection opened")
     
     def close(self):
-        self.ws.close()
         if self.log_level > 0:
             print("PC_websocket_server.py: closing websocket client...")
         self.is_stopped = True
+        self.ws.close()
         self.ws_thread.join()
         if self.log_level > 0:
             print("PC_websocket_server.py: websocket client closed.")

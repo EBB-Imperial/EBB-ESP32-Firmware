@@ -72,8 +72,9 @@ def main():
 
     # Clean up, stop the threads when done
     receiver.stop()
-    decoder.stop()
     socket_client.close()
+    decoder.stop()
+    
 
 
 if __name__ == "__main__":
