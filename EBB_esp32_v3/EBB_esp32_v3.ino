@@ -5,7 +5,7 @@
 // ------------------ UDP ------------------
 #define UDP_PORT 1234
 #define UDP_PACKET_SIZE 1024   // we send this much data in each packet
-
+#define SYNC_WORD "UUUUUUUUUUUUUUUw"
 
 // ------------------ UART ------------------
 #define UART_BAUD 1000000
@@ -109,6 +109,12 @@ void loop()
             
             // reading bytes from URAT will block until we get URAT_BUFFER_SIZE bytes or until URAT_TIMEOUT
             size_t bytes_read = Serial2.readBytes(buffer, URAT_BUFFER_SIZE);
+
+            // if this is last request, we append a sync word to the end of the buffer
+            if (request_count == URAT_REQUEST_COUNT - 1)
+            {
+                memcpy(buffer + bytes_read, SYNC_WORD, strlen(SYNC_WORD));
+            }
 
             if (bytes_read == URAT_BUFFER_SIZE)
             {
