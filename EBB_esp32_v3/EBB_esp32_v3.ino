@@ -13,7 +13,7 @@
 #define URAT_REQUEST_COUNT 10    // we will send this many requests to the FPGA per picture
 #define URAT_TIMEOUT 1000       // we will wait this long for the FPGA to respond before sending another request
 
-// instructions for FPGA
+// ------------------ URAT Instructions ------------------
 // 1. Reset to first byte of picture
 #define URAT_INSTRUCTION_RESET 0x00
 // 2. Request next 15104 bytes of picture
@@ -104,8 +104,8 @@ void loop()
             }
 
             // instruction for requesting image: request instruction + number of bytes to request
-            uint8_t request_instruction[2] = {URAT_INSTRUCTION_REQUEST, URAT_BUFFER_SIZE};
-            Serial2.write(request_instruction, 2);
+            uint8_t request_instruction[3] = {URAT_INSTRUCTION_REQUEST, URAT_BUFFER_SIZE & 0xff, (URAT_BUFFER_SIZE >> 8) & 0xff};
+            Serial2.write(request_instruction, 3);
             
             // reading bytes from URAT will block until we get URAT_BUFFER_SIZE bytes or until URAT_TIMEOUT
             size_t bytes_read = Serial2.readBytes(buffer, URAT_BUFFER_SIZE);
