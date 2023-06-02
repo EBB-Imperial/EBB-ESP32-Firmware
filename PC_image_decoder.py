@@ -2,6 +2,7 @@ import time
 import os
 import PIL.Image as Image
 from threading import Thread
+from tqdm import tqdm
 
 class ImageDecoder:
 
@@ -25,6 +26,9 @@ class ImageDecoder:
         self.thread = Thread(target=self.start_decode)
         self.is_stopped = False
 
+        self.expected_raw_length = self.IMG_WIDTH * self.IMG_HEIGHT * 2
+        self.expected_decoded_length = self.IMG_WIDTH * self.IMG_HEIGHT * 3
+
     def start(self):
         self.thread.start()
 
@@ -42,9 +46,11 @@ class ImageDecoder:
 
     def pixels_to_image(self, pixels):
         pixels = bytes([px for rgb in pixels for px in rgb])
-        pixels += bytes([0] * (self.IMG_WIDTH * self.IMG_HEIGHT * 3 - len(pixels)))
-        if len(pixels) != self.IMG_WIDTH * self.IMG_HEIGHT * 3:
-            pixels = pixels[:self.IMG_WIDTH * self.IMG_HEIGHT * 3]
+        if self.LOG_LEVEL > 2:
+            print("image decoder: expected length: " + str(self.expected_decoded_length) + ", actual length: " + str(len(pixels)))
+        pixels += bytes([0] * (self.expected_decoded_length - len(pixels)))
+        if len(pixels) != self.expected_decoded_length:
+            pixels = pixels[:self.expected_decoded_length]
         return Image.frombytes("RGB", (self.IMG_WIDTH, self.IMG_HEIGHT), pixels)
 
     def delete_old_images(self):
@@ -73,18 +79,34 @@ class ImageDecoder:
 
     def start_decode(self):
         raw_img_pixels = []
+        pbar = None
         for data in self.data_stream:
             if self.is_stopped:
                 break
+
             sync_word_index = data.find(self.SYNC_WORD)
             if sync_word_index == -1:
                 raw_img_pixels += data
+                if self.LOG_LEVEL > 1 and pbar is not None: 
+                    pbar.update(len(data))  # Update the progress bar
                 continue
+
+            if self.LOG_LEVEL > 1 and pbar is not None: 
+                pbar.update(len(data))  # Update the progress bar for the last part of the current image
+                pbar.close()  # Close the current progress bar
+
             raw_img_pixels += data[sync_word_index + len(self.SYNC_WORD):]
             img_pixels = [self.process_byte(raw_img_pixels[i:i+2]) for i in range(0, len(raw_img_pixels), 2)]
             img = self.pixels_to_image(img_pixels)
             self.save_image(img, str(int(time.time())) + ".jpg")
+
             raw_img_pixels = []
+            
+            if self.LOG_LEVEL > 1: 
+                print()
+                pbar = tqdm(total=self.expected_raw_length)  # Start a new progress bar for the next image
+
+
 
     def stop(self):
         self.is_stopped = True

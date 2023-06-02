@@ -1,16 +1,19 @@
 import os
 import io
+import time
 
 from PC_receiver_v2 import UDPReceiver
 
 RECORD_SIZE_LIMIT = 1024 * 1024  # e.g. 1MB
-RECORDED_DATA_PATH = "recorded_bytes.txt"
+RECORDED_DATA_PATH = "recorded_inputs/recorded_bytes.txt"
+PACKAGE_SIM_DELAY = 0.01  # seconds
 
 class UDPReceiverSimulator:
-    def __init__(self, ip = "", port = 1024, log_level = 1, record_size_limit=RECORD_SIZE_LIMIT):
+    def __init__(self, ip = "", port = 1024, log_level = 1, package_sim_delay = PACKAGE_SIM_DELAY, record_size_limit=RECORD_SIZE_LIMIT):
         self.receiver = UDPReceiver(ip, port)
         #self.receiver.start()
         self.record_size_limit = record_size_limit
+        self.package_sim_delay = package_sim_delay
         self.recorded_bytes = io.BytesIO()
         self.log_level = log_level
 
@@ -39,6 +42,7 @@ class UDPReceiverSimulator:
                 data = f.read(package_size)
                 if not data:
                     break
+                time.sleep(self.package_sim_delay)
                 yield data
 
     def stop(self):

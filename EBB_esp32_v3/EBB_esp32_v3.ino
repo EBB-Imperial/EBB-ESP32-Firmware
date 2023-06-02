@@ -31,7 +31,7 @@ const char* ssid = "EBB_esp32_v1_AP";
 const char* password = "EBBBBBBB";
 
 AsyncUDP udp;
-uint8_t buffer[URAT_BUFFER_SIZE];
+uint8_t buffer[URAT_BUFFER_SIZE + strlen(SYNC_WORD)];
 size_t request_count = 0;
 
 // a state machine to keep track of what we're doing

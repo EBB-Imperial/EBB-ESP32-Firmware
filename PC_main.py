@@ -18,7 +18,7 @@ import time
 """
 
 # ------------------- hyper parameters ------------------- #
-LOG_LEVEL = 1
+LOG_LEVEL = 3
 
 # image decoder
 USE_SIM_INPUT = True
@@ -50,9 +50,9 @@ def main():
                            sync_word=SYNC_WORD, use_sim_input=USE_SIM_INPUT, delete_old_images=DELETE_OLD_IMAGES,
                             log_level=LOG_LEVEL)
     
-    sender = UDPSender(dst_ip=ESP_IP, dst_port=ESP_PORT, log_level=LOG_LEVEL, test_mode=USE_SIM_INPUT)
+    sender = UDPSender(dst_ip=ESP_IP, dst_port=ESP_PORT, log_level=0, test_mode=USE_SIM_INPUT)
 
-    socket_client = WebSocketClient(url=LOCAL_SERVER_URL, log_level=LOG_LEVEL)
+    socket_client = WebSocketClient(url=LOCAL_SERVER_URL, log_level=0)
 
     receiver.start()
     decoder.start()
