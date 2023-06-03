@@ -104,8 +104,8 @@ void loop()
             }
 
             // instruction for requesting image: request instruction + number of bytes to request
-            uint8_t request_instruction[2] = {URAT_INSTRUCTION_REQUEST, URAT_BUFFER_SIZE};
-            Serial2.write(request_instruction, 2);
+            uint8_t request_instruction[3] = {URAT_INSTRUCTION_REQUEST, URAT_BUFFER_SIZE & 0xff, (URAT_BUFFER_SIZE >> 8) & 0xff};
+            Serial2.write(request_instruction, 3);
             
             // reading bytes from URAT will block until we get URAT_BUFFER_SIZE bytes or until URAT_TIMEOUT
             size_t bytes_read = Serial2.readBytes(buffer, URAT_BUFFER_SIZE);

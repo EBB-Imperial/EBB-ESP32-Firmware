@@ -1,8 +1,10 @@
 import socket
 from multiprocessing import Process, Queue, freeze_support
 
+record_file_dir = "recorded_inputs/received_info_debug.txt"
+
 class UDPReceiver:
-    def __init__(self, ip="", port=1234, log_level = 1):
+    def __init__(self, ip="", port=1234, log_level = 1, record_mode=False):
         self.ip = ip
         self.port = port
         self.queue = Queue()
@@ -10,6 +12,7 @@ class UDPReceiver:
         self.socket = socket.socket(socket.AF_INET, # Internet
                                 socket.SOCK_DGRAM)
         self.log_level = log_level
+        self.record_mode = record_mode
 
     def start(self):
         self.process.start()
@@ -24,11 +27,15 @@ class UDPReceiver:
     def run(self):
         self.socket.bind((self.ip, self.port))
 
-        while True:
-            #print("receiving data: ", end="")
-            data, addr = self.socket.recvfrom(1024) # buffer size is 1024 bytes
-            #print(data)
-            self.queue.put(data)
+        # write the data to another file
+        with open(record_file_dir, 'w') as f:
+            while True:
+                #print("receiving data: ", end="")
+                data, addr = self.socket.recvfrom(1024) # buffer size is 1024 bytes
+                #print(data)
+                self.queue.put(data)
+                if self.record_mode:
+                    f.writelines(hex(x) + "\n" for x in data)
 
     def get_data_stream(self):
         while True:

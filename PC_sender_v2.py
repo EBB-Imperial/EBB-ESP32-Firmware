@@ -1,4 +1,5 @@
 import socket
+import time
 
 class UDPSender:
     def __init__(self, dst_ip="192.168.4.1", dst_port=1234, log_level=1, test_mode=False):
@@ -19,11 +20,13 @@ class UDPSender:
                 print(f"UDPSender: data " + str(data) + " sent to " + self.dst_ip + ":" + str(self.dst_port))
             
     def self_test(self):
+        time.sleep(2)
         # do a self test that uses the simulator to send picture data, boardcast to the local network
         from PC_input_simulator import UDPReceiverSimulator
         receiver = UDPReceiverSimulator(ip="192.168.1.10", port=1234, log_level=0, data_file_path="recorded_inputs/one_image_data_bytes.txt", package_sim_delay=0.1)
         receiver.start()
         sender = UDPSender(dst_ip="192.168.1.255", dst_port=1234, log_level=0, test_mode=False)
+        # write the data to another file
         for data in receiver.get_data_stream():
             sender.send_data(data)
         receiver.stop()

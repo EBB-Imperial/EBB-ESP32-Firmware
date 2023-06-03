@@ -22,7 +22,8 @@ LOG_LEVEL = 3
 
 # image decoder
 USE_SIM_INPUT = False
-USE_SIM_UDP = True
+USE_SIM_UDP = False
+SAVE_RECORD = False
 DELETE_OLD_IMAGES = True
 IMG_FOLDER = "images"
 IMG_WIDTH = 320
@@ -45,7 +46,7 @@ def main():
     if USE_SIM_INPUT:
         receiver = UDPReceiverSimulator(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL)
     else:
-        receiver = UDPReceiver(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL)
+        receiver = UDPReceiver(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL, record_mode=SAVE_RECORD)
 
     decoder = ImageDecoder(receiver, img_width=IMG_WIDTH, img_height=IMG_HEIGHT, img_folder=IMG_FOLDER,
                            sync_word=SYNC_WORD, use_sim_input=USE_SIM_INPUT, delete_old_images=DELETE_OLD_IMAGES,
