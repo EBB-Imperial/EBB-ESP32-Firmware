@@ -21,7 +21,8 @@ import time
 LOG_LEVEL = 3
 
 # image decoder
-USE_SIM_INPUT = True
+USE_SIM_INPUT = False
+USE_SIM_UDP = True
 DELETE_OLD_IMAGES = True
 IMG_FOLDER = "images"
 IMG_WIDTH = 320
@@ -58,13 +59,17 @@ def main():
     decoder.start()
     socket_client.start()
 
+    # self test on UDP
+    if USE_SIM_UDP:
+        sender.self_test()
+
 
     try:
         # Main loop
         while True:
             # testing
             
-            sender.send_data(b"**data**")
+            #sender.send_data(b"**data**")
             time.sleep(1)  # Pause for a while
             
     except KeyboardInterrupt:

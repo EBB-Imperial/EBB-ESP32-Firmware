@@ -80,6 +80,10 @@ class ImageDecoder:
     def start_decode(self):
         raw_img_pixels = []
         pbar = None
+        if self.LOG_LEVEL > 1: 
+            print()
+            pbar = tqdm(total=self.expected_raw_length)  # Start a new progress bar for the next image
+            
         for data in self.data_stream:
             if self.is_stopped:
                 break
