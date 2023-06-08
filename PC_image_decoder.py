@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 class ImageDecoder:
 
-    def __init__(self, receiver, img_width=320, img_height=235, img_folder="images",
+    def __init__(self, receiver, img_width=320, img_height=236, img_folder="images",
                  sync_word=b"UUUUUUUUUUUUUUUw", use_sim_input=False, delete_old_images=True, log_level=1):
 
         self.IMG_WIDTH = img_width
@@ -21,7 +21,7 @@ class ImageDecoder:
             self.delete_old_images()
 
         self.receiver = receiver
-        self.data_stream = self.receiver.get_data_stream()
+        self.data_stream = self.receiver.get_picture_data_stream()
 
         self.thread = Thread(target=self.start_decode)
         self.is_stopped = False
@@ -80,36 +80,74 @@ class ImageDecoder:
     def start_decode(self):
         raw_img_pixels = []
         pbar = None
+        last_position_index = 0
+        new_image = True
+
         if self.LOG_LEVEL > 1: 
             print()
             pbar = tqdm(total=self.expected_raw_length)  # Start a new progress bar for the next image
             
-        for data in self.data_stream:
+        for picture_data in self.data_stream:
             if self.is_stopped:
                 break
 
-            sync_word_index = data.find(self.SYNC_WORD)
-            if sync_word_index == -1:
-                raw_img_pixels += data
+            position_index = picture_data.positionIndex
+            #print("position index: ", position_index)
+            data = picture_data.data
+            #print(data)
+            #print("image decoder: received data, position index: ", position_index)
+
+            # if the position index is smaller than the last one by at least one twenty the image, it means the image is finished
+            if (last_position_index - position_index) >= (self.expected_raw_length / 2):
+                bad_image = False
+                # if raw_img_pixels is less than half of the expected length, it's a bad image
+                if  len(raw_img_pixels) < self.expected_raw_length / 2:
+                    bad_image = True
+                    if self.LOG_LEVEL > 0:
+                        print("image decoder: bad image, position index: " + str(position_index))
+                
+                else:
+                    # fill the rest of the image with black pixels
+                    raw_img_pixels += [0] * (self.expected_raw_length - len(raw_img_pixels))
+                    img_pixels = [self.process_byte(raw_img_pixels[i:i+2]) for i in range(0, len(raw_img_pixels), 2)]
+                    img = self.pixels_to_image(img_pixels)
+                    self.save_image(img, str(int(time.time())) + ".png")
+                
+                raw_img_pixels = []
+                last_position_index = 0
+                new_image = True
+
                 if self.LOG_LEVEL > 1 and pbar is not None: 
-                    pbar.update(len(data))  # Update the progress bar
-                continue
+                    pbar.update(len(data))  # Update the progress bar for the last part of the current image
+                    pbar.close()  # Close the current progress bar
+                    print()
+                    pbar = tqdm(total=self.expected_raw_length)  # Start a new progress bar for the next image
+
+            # fill black pixels up to the current position index
+            # if not new_image:
+
+            if position_index != last_position_index:
+                print("position index: %s, last position: %s, difference: %s " %(position_index, last_position_index, abs(position_index - last_position_index)))
+
+            raw_img_pixels += [0] * max(position_index - last_position_index, 0)
+            raw_img_pixels = self.even_pixels(raw_img_pixels)
+
+            # add the data to the raw image pixels
+            raw_img_pixels += data
+            raw_img_pixels = self.even_pixels(raw_img_pixels)
+
+            # update the last position index
+            #if not new_image:
+            last_position_index = position_index + len(data)
+            #print("last position index: ", last_position_index)
+            new_image = False
 
             if self.LOG_LEVEL > 1 and pbar is not None: 
-                pbar.update(len(data))  # Update the progress bar for the last part of the current image
-                pbar.close()  # Close the current progress bar
+                pbar.update(len(data))  # Update the progress bar
+    
 
-            raw_img_pixels += data[sync_word_index + len(self.SYNC_WORD):]
-            img_pixels = [self.process_byte(raw_img_pixels[i:i+2]) for i in range(0, len(raw_img_pixels), 2)]
-            img = self.pixels_to_image(img_pixels)
-            self.save_image(img, str(int(time.time())) + ".jpg")
-
-            raw_img_pixels = []
-            
-            if self.LOG_LEVEL > 1: 
-                print()
-                pbar = tqdm(total=self.expected_raw_length)  # Start a new progress bar for the next image
-
+    def even_pixels(self, data):
+        return data if len(data) % 2 == 0 else data + [0]
 
 
     def stop(self):

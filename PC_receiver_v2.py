@@ -1,18 +1,23 @@
 import socket
 from multiprocessing import Process, Queue, freeze_support
+from PC_message_decoder import MessageDecoder, PictureData
 
 record_file_dir = "recorded_inputs/received_info_debug.txt"
+
 
 class UDPReceiver:
     def __init__(self, ip="", port=1234, log_level = 1, record_mode=False):
         self.ip = ip
         self.port = port
-        self.queue = Queue()
+        self.__queue = Queue(maxsize=2048)
+        self.picture_data_queue = Queue(maxsize=2048)
         self.process = Process(target=self.run)
         self.socket = socket.socket(socket.AF_INET, # Internet
                                 socket.SOCK_DGRAM)
         self.log_level = log_level
         self.record_mode = record_mode
+        # decoder for decoding the received data
+        self.decoder = MessageDecoder()
 
     def start(self):
         self.process.start()
@@ -27,20 +32,41 @@ class UDPReceiver:
     def run(self):
         self.socket.bind((self.ip, self.port))
 
+        if self.log_level > 0: print("UDP receiver running.")
+
         # write the data to another file
         with open(record_file_dir, 'w') as f:
             while True:
                 #print("receiving data: ", end="")
-                data, addr = self.socket.recvfrom(1024) # buffer size is 1024 bytes
-                #print(data)
-                self.queue.put(data)
+                data, addr = self.socket.recvfrom(1027) # buffer size is 1027 bytes
+                #print(bin(int.from_bytes(data, "little")))
+                self.__queue.put(data)
                 if self.record_mode:
                     f.writelines(hex(x) + "\n" for x in data)
+                
+                # decode the data
+                decoded_data = self.decoder.decode_package(data)
 
-    def get_data_stream(self):
+                if type(decoded_data) is PictureData:
+                    self.picture_data_queue.put(decoded_data)
+                
+                else:
+                    print("Package type not matched - got header: " + str(self.decoder.get_package_header(data)))
+
+
+    def get_raw_data_stream(self):
         while True:
-            while not self.queue.empty():
-                yield self.queue.get()
+            while not self.__queue.empty():
+                yield self.__queue.get()
+
+    
+    def get_picture_data_stream(self):
+        while True:
+            while not self.picture_data_queue.empty():
+                yield self.picture_data_queue.get()
+
+    
+    
 
 
 if __name__ == "__main__":
@@ -52,5 +78,5 @@ if __name__ == "__main__":
     print("URAT receiver initilized.")
 
     # Keep the script running until the user terminates it
-    for data in receiver.get_data_stream():
+    for data in receiver.get_raw_data_stream():
         print("New data: ", data)

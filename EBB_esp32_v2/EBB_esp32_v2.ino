@@ -6,7 +6,7 @@
 
 #define UART_BAUD 1000000
 #define UDP_PORT 1234
-#define BUFFER_SIZE 1024  // adjust this value based on your requirements
+#define BUFFER_SIZE 1027  // adjust this value based on your requirements
 
 const char* ssid = "EBB_esp32_v1_AP";
 const char* password = "EBBBBBBB";

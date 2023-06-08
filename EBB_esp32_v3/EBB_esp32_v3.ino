@@ -4,8 +4,17 @@
 
 // ------------------ UDP ------------------
 #define UDP_PORT 1234
-#define UDP_PACKET_SIZE 1024   // we send this much data in each packet
+#define UDP_PACKET_SIZE 1027   // we send this much data in each packet
 #define SYNC_WORD "UUUUUUUUUUUUUUUw"
+
+// ------------------ UDP Headers ------------------
+#define UDP_HEADER_SIZE 3          // three bytes for header
+#define UDP_PACKET_PAYLOAD_SIZE (UDP_PACKET_SIZE - UDP_HEADER_SIZE)
+// 1. Picture header
+#define UDP_HEADER_PICTURE 0x80     // three bits for instruction
+#define UDP_HEADER_PICTURE_INDEX 21  // 21 bits for picture index
+// we will add other headers later
+#define UDP_HEADER_PICTURE_NEW_CHUNK 0x40  // three bits for instruction
 
 // ------------------ UART ------------------
 #define UART_BAUD 1000000
@@ -33,6 +42,7 @@ const char* password = "EBBBBBBB";
 AsyncUDP udp;
 uint8_t buffer[URAT_BUFFER_SIZE + strlen(SYNC_WORD)];
 size_t request_count = 0;
+size_t position_bias = 0;
 
 // a state machine to keep track of what we're doing
 enum class FPGA_Comm_State
@@ -89,6 +99,7 @@ void loop()
 
             // reset the request count
             request_count = 0;
+            position_bias = 0;
 
             state = FPGA_Comm_State::Requesting_Image;
             Serial.println("FPGA_Comm_State: REQUESTING_IMAGE");
@@ -102,6 +113,8 @@ void loop()
                 Serial.println("FPGA_Comm_State: IDLE");
                 break;
             }
+
+            //position_bias += 256;
 
             // instruction for requesting image: request instruction + number of bytes to request
             uint8_t request_instruction[3] = {URAT_INSTRUCTION_REQUEST, URAT_BUFFER_SIZE & 0xff, (URAT_BUFFER_SIZE >> 8) & 0xff};
@@ -132,11 +145,30 @@ void loop()
         }
 
         case FPGA_Comm_State::Sending_Image:
+            // // send an empty packet to signal the start of a new chunk
+            // uint8_t new_chunk_packet[UDP_PACKET_SIZE];
+            // new_chunk_packet[0] = UDP_HEADER_PICTURE_NEW_CHUNK;
+            // udp.broadcastTo(new_chunk_packet, UDP_PACKET_SIZE, UDP_PORT);
+
             // split the buffer into UDP_PACKET_SIZE chunks and send them
             // if we've sent all the chunks, move to the Requesting_Image state
-            for (int i = 0; i < URAT_BUFFER_SIZE; i += UDP_PACKET_SIZE)
+            for (int i = 0; i < URAT_BUFFER_SIZE; i += UDP_PACKET_PAYLOAD_SIZE)
             {
-                udp.broadcastTo(buffer + i, UDP_PACKET_SIZE, UDP_PORT);
+                // before sending, we need to add a header to the packet
+                uint8_t packet[UDP_PACKET_SIZE];
+                // calculate the starting index of the packet
+                int packet_index = request_count * URAT_BUFFER_SIZE + i + position_bias;
+                // add the header. note we need to make package_index 21 bits long
+                packet[0] = UDP_HEADER_PICTURE | ((packet_index >> 16) & 0x1f);
+                packet[1] = (packet_index >> 8) & 0xff;
+                packet[2] = packet_index & 0xff;
+                // packet[0] = 0x80;
+                // packet[1] = 0x00;
+                // packet[2] = 0x00;
+                // copy the payload
+                memcpy(packet + UDP_HEADER_SIZE, buffer + i, UDP_PACKET_PAYLOAD_SIZE);
+                // send the packet
+                udp.broadcastTo(packet, UDP_PACKET_SIZE, UDP_PORT);
             }
             request_count++;
             state = FPGA_Comm_State::Requesting_Image;
