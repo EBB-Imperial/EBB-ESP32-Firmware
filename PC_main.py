@@ -1,4 +1,4 @@
-
+from PC_receiver_v1 import TCPReceiver
 from PC_receiver_v2 import UDPReceiver
 from PC_sender_v2 import UDPSender
 from PC_input_simulator import UDPReceiverSimulator
@@ -31,9 +31,9 @@ IMG_HEIGHT = 235
 SYNC_WORD = b"UUUUUUUUUUUUUUUw"
 
 # URAT receiver
-ESP_IP = "192.168.4.1"  # sending ip
+ESP_IP = "192.168.4.255"  # sending ip
 ESP_PORT = 1234         # sending port
-UDP_IP = ""             # receiving ip (currently set to boardcast)
+UDP_IP = "192.168.4.1"             # receiving ip (currently set to boardcast)
 UDP_PORT = ESP_PORT     # receiving port
 
 # websocket client
@@ -46,7 +46,7 @@ def main():
     if USE_SIM_INPUT:
         receiver = UDPReceiverSimulator(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL)
     else:
-        receiver = UDPReceiver(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL, record_mode=SAVE_RECORD)
+        receiver = TCPReceiver(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL, record_mode=SAVE_RECORD)
 
     decoder = ImageDecoder(receiver, img_width=IMG_WIDTH, img_height=IMG_HEIGHT, img_folder=IMG_FOLDER,
                            sync_word=SYNC_WORD, use_sim_input=USE_SIM_INPUT, delete_old_images=DELETE_OLD_IMAGES,

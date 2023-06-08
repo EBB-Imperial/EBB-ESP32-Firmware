@@ -1,39 +1,82 @@
-import websocket
-import binascii
+import socket
+from multiprocessing import Process, Queue, freeze_support
+from PC_message_decoder import MessageDecoder, PictureData
 
-esp_ip_addr = "192.168.4.1"
+record_file_dir = "recorded_inputs/received_info_debug.txt"
+
+class TCPReceiver:
+    def __init__(self, ip="192.168.4.1", port=1234, log_level = 1, record_mode=False):
+        self.ip = ip
+        self.port = port
+        self.__queue = Queue()
+        self.picture_data_queue = Queue()
+        self.process = Process(target=self.run)
+        self.socket = socket.socket(socket.AF_INET, # Internet
+                                socket.SOCK_STREAM)
+        self.log_level = log_level
+        self.record_mode = record_mode
+        # decoder for decoding the received data
+        self.decoder = MessageDecoder()
+
+    def start(self):
+        self.process.start()
+        if (self.log_level > 0): print("receiver.py: TCP process started.")
+        freeze_support()    # allow current process to finish bootstrapping
+
+    def stop(self):
+        if (self.log_level > 0): print("receiver.py: stopping process...")
+        self.process.terminate()
+        if (self.log_level): print("receiver.py: process terminated.")
+
+    def run(self):
+        self.socket.connect((self.ip, self.port))
+
+        if self.log_level > 0: print("TCP receiver running.")
+
+        buffer = bytes()
+
+        # write the data to another file
+        with open(record_file_dir, 'w') as f:
+            while True:
+                data = self.socket.recv(1024) # buffer size is 1024 bytes
+                buffer += data
+
+                while len(buffer) >= 8:  # while we have enough data for at least one message
+                    message = buffer[:8]  # get the first 2 bytes
+                    buffer = buffer[8:]  # remove the first 2 bytes from the buffer
+                
+                    decoded_data = self.decoder.decode_package(message)
+                
+                    self.__queue.put(message)
+                    if self.record_mode:
+                        f.writelines(hex(x) + "\n" for x in data)
+
+                    if type(decoded_data) is PictureData:
+                        self.picture_data_queue.put(decoded_data)
+
+                    else:
+                        print("Package type not matched by decoder: ", decoded_data)
 
 
-# pretty printing
-msg_row_index = 0
-msg_col_index = 0
-max_col_cnt = 10
+    def get_raw_data_stream(self):
+        while True:
+            while not self.__queue.empty():
+                yield self.__queue.get()
 
-def on_message(ws, message):
-    global msg_col_index, msg_row_index
-    msg_col_index += 1
-    if (msg_col_index >= max_col_cnt):
-        msg_row_index += 1
-        msg_col_index = 0
-        print("\n%d" % msg_row_index, end=" ")
     
-    print(binascii.hexlify(message), end=" ")
+    def get_picture_data_stream(self):
+        while True:
+            while not self.picture_data_queue.empty():
+                yield self.picture_data_queue.get()
 
-def on_error(ws, error):
-    print("WebSocket error:", error)
 
-def on_close(ws, reason=None, code=None):
-    print("WebSocket connection closed")
+if __name__ == "__main__":
+    # for testing use
+    receiver = TCPReceiver()
+    receiver.start()
 
-def on_open(ws):
-    print("WebSocket connection established")
+    print("TCP receiver initilized.")
 
-#websocket.enableTrace(True)
-ws = websocket.WebSocketApp("ws://" + esp_ip_addr + "/ws",
-                            on_message=on_message,
-                            on_error=on_error,
-                            on_close=on_close,
-                            subprotocols=["binary"])
-ws.on_open = on_open
-
-ws.run_forever()
+    # Keep the script running until the user terminates it
+    for data in receiver.get_raw_data_stream():
+        print("New data: ", data)

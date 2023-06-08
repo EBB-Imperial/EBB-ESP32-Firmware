@@ -1,10 +1,13 @@
 #include "WiFi.h"
+#include <vector>
 
-
-// ------------------ UDP ------------------
+// ------------------ TCP ------------------
 #define TCP_PORT 1234
 #define UDP_PACKET_SIZE 1027   // we send this much data in each packet
-#define SYNC_WORD "UUUUUUUUUUUUUUUw"
+
+// ------------------ TCP Instructions ------------------
+#define TCP_ABORT_HEADER 0x4747484849494A4A
+#define TCP_IMAGE_FINISH 0x6767686869696A6A
 
 // ------------------ UDP Headers ------------------
 #define UDP_HEADER_SIZE 24          // three bytes for header
@@ -39,8 +42,14 @@ const char* password = "EBBBBBBB";
 
 WiFiServer server(TCP_PORT);
 
-uint8_t buffer[URAT_BUFFER_SIZE + strlen(SYNC_WORD)];
+uint8_t buffer[URAT_BUFFER_SIZE];
 size_t request_count = 0;
+
+
+std::vector<WiFiClient> clients;
+
+// ------------------ Main ------------------
+
 
 // a state machine to keep track of what we're doing
 enum class FPGA_Comm_State
@@ -74,11 +83,43 @@ void setup()
     Serial.println("FPGA_Comm_State: RESET");
 }
 
+
+void boardcast_message(uint8_t* message, size_t size)
+{
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        clients[i].write(message, size);
+    }
+}
+
+void boardcast_message(uint64_t message)
+{
+    for (size_t i = 0; i < clients.size(); i++)
+    {
+        clients[i].write((uint8_t*)&message, 8);
+    }
+}
+
+
 void loop()
 {
     // check if there are any new clients
     WiFiClient client = server.available();
-    
+    if (client)
+    {
+        Serial.println("New client connected");
+        clients.push_back(client);
+    }
+
+    // remove disconnected clients
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (!clients[i].connected()) {
+            Serial.println("Client disconnected");
+            clients.erase(clients.begin() + i);
+            i--;  // adjust index after removing element
+        }
+    }
+
     // state machine
     switch (state)
     {
@@ -91,6 +132,9 @@ void loop()
             // send a reset command and move to the Requesting_Image state
             Serial2.write(URAT_INSTRUCTION_RESET);
 
+            // send abort message to all clients
+            boardcast_message(TCP_ABORT_HEADER);
+
             // reset the request count
             request_count = 0;
 
@@ -100,8 +144,11 @@ void loop()
 
         case FPGA_Comm_State::Requesting_Image: {
             // check if we've sent enough requests
-            if (request_count >= URAT_REQUEST_COUNT)
+            if (request_count >= URAT_REQUEST_COUNT - 1)
             {
+                // send finish message to all clients
+                boardcast_message(TCP_IMAGE_FINISH);
+
                 state = FPGA_Comm_State::Idle;
                 Serial.println("FPGA_Comm_State: IDLE");
                 break;
@@ -113,12 +160,6 @@ void loop()
             
             // reading bytes from URAT will block until we get URAT_BUFFER_SIZE bytes or until URAT_TIMEOUT
             size_t bytes_read = Serial2.readBytes(buffer, URAT_BUFFER_SIZE);
-
-            // if this is last request, we append a sync word to the end of the buffer
-            if (request_count == URAT_REQUEST_COUNT - 1)
-            {
-                memcpy(buffer + bytes_read, SYNC_WORD, strlen(SYNC_WORD));
-            }
 
             if (bytes_read == URAT_BUFFER_SIZE)
             {
@@ -136,23 +177,8 @@ void loop()
         }
 
         case FPGA_Comm_State::Sending_Image:
-            // split the buffer into UDP_PACKET_PAYLOAD_SIZE chunks and send them
-            // if we've sent all the chunks, move to the Requesting_Image state
-            for (int i = 0; i < URAT_BUFFER_SIZE; i += UDP_PACKET_PAYLOAD_SIZE)
-            {
-                // before sending, we need to add a header to the packet
-                uint8_t packet[UDP_PACKET_SIZE];
-                // calculate the starting index of the packet
-                int packet_index = request_count * URAT_BUFFER_SIZE + i;
-                // add the header. note we need to make package_index 21 bits long
-                packet[0] = UDP_HEADER_PICTURE | ((packet_index >> 16) & 0x1f);
-                packet[1] = (packet_index >> 8) & 0xff;
-                packet[2] = packet_index & 0xff;
-                // copy the payload
-                memcpy(packet + UDP_HEADER_SIZE, buffer + i, UDP_PACKET_PAYLOAD_SIZE);
-                // send the packet
-                client.write(packet, UDP_PACKET_SIZE);
-            }
+            // send the image to all clients
+            boardcast_message(buffer, URAT_BUFFER_SIZE);
             request_count++;
             state = FPGA_Comm_State::Requesting_Image;
             break;
