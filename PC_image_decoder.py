@@ -81,18 +81,21 @@ class ImageDecoder:
     def start_decode(self):
         raw_img_pixels = []
         pbar = None
+        image_started = False
 
         if self.LOG_LEVEL > 1: 
             print()
             pbar = tqdm(total=self.expected_raw_length)  # Start a new progress bar for the next image
             
         for picture_data in self.data_stream:
+
             if self.is_stopped:
                 break
 
             data = picture_data.data
             abort = picture_data.abort
             finished = picture_data.finished
+            start = picture_data.start
 
             if abort or finished:
                 if abort:
@@ -104,15 +107,26 @@ class ImageDecoder:
                         img = self.pixels_to_image(img_pixels)
                         self.save_image(img, str(int(time.time())) + ".png")
                 
-                #raw_img_pixels = []
+                raw_img_pixels = []
+                image_started = False
+
                 if pbar is not None:
                     pbar.close()  # Close the current progress bar
                     print()
                     pbar = tqdm(total=self.expected_raw_length)  # Start a new progress bar for the next image
                 continue
 
+            # reject all data before the start message
+            if not image_started:
+                if start:
+                    if self.LOG_LEVEL > 0:
+                        print("image decoder: image started")
+                    image_started = True
 
-            if self.LOG_LEVEL > 1 and pbar is not None: 
+                continue
+
+
+            if self.LOG_LEVEL > 1 and pbar is not None and data is not None:
                 pbar.update(len(data))  # Update the progress bar for the last part of the current image
 
             # add the data to the raw image pixels
