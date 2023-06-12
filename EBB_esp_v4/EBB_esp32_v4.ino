@@ -6,6 +6,7 @@
 #define UDP_PACKET_SIZE 1027   // we send this much data in each packet
 
 // ------------------ TCP Instructions ------------------
+#define TCP_START_HEADER 0x2727282829292A2A
 #define TCP_ABORT_HEADER 0x4747484849494A4A
 #define TCP_IMAGE_FINISH 0x6767686869696A6A
 
@@ -21,7 +22,7 @@
 #define UART_BAUD 1000000
 #define URAT_BUFFER_SIZE 15104  // we cache this much data before dividing it into packets (151040 / 10) = 15104 bytes, i.e, 1/10 of picture
 #define URAT_REQUEST_COUNT 10    // we will send this many requests to the FPGA per picture
-#define URAT_TIMEOUT 1000       // we will wait this long for the FPGA to respond before sending another request
+#define URAT_TIMEOUT 50       // we will wait this long for the FPGA to respond before sending another request
 
 // ------------------ URAT Instructions ------------------
 // 1. Reset to first byte of picture
@@ -144,7 +145,12 @@ void loop()
 
         case FPGA_Comm_State::Requesting_Image: {
             // check if we've sent enough requests
-            if (request_count >= URAT_REQUEST_COUNT - 1)
+            if (request_count == 0)
+            {
+                // send start message to all clients
+                boardcast_message(TCP_START_HEADER);
+            }
+            if (request_count >= URAT_REQUEST_COUNT)
             {
                 // send finish message to all clients
                 boardcast_message(TCP_IMAGE_FINISH);
