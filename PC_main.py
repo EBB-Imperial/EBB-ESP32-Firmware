@@ -21,6 +21,7 @@ LOG_LEVEL = 3
 
 # image decoder
 USE_SIM_INPUT = False
+AUTO_TEST_INSTRUCTION = False
 SAVE_RECORD = False
 DELETE_OLD_IMAGES = True
 IMG_FOLDER = "images"
@@ -59,19 +60,17 @@ def main():
     decoder = ImageDecoder(receiver, img_width=IMG_WIDTH, img_height=IMG_HEIGHT, img_folder=IMG_FOLDER,
                            use_sim_input=USE_SIM_INPUT, delete_old_images=DELETE_OLD_IMAGES,
                             log_level=LOG_LEVEL)
-    
-    socket_client = WebSocketClient(url=LOCAL_SERVER_URL, log_level=0)
 
     receiver.start()
     decoder.start()
-    socket_client.start()
 
     sender = TCPSender(server_ip=ESP_IP, server_port=ESP_PORT, socket=receiver.socket, log_level=LOG_LEVEL)
-
     sender.start()
 
-    sender.send(QUERY_STATE)
+    socket_client = WebSocketClient(url=LOCAL_SERVER_URL, sender=sender, log_level=3)
+    socket_client.start()
 
+    sender.send(QUERY_STATE)
 
     try:
         # Main loop
@@ -80,18 +79,20 @@ def main():
                 if esp_data.ready:
                     if LOG_LEVEL > 0:
                         print("main.py: received READY message from ESP")
-                    sender.send(SEND_IMAGE)
+                    if AUTO_TEST_INSTRUCTION: sender.send(SEND_IMAGE)
                 elif esp_data.image_sent:
                     # TODO: call image processing script
                     # for testing purpose, we send a random move instruction (e.g. MOVE:1 or ROTATE:10)
                     if LOG_LEVEL > 0:
                         print("main.py: received IMAGE_SENT message from ESP")
-                    random_move_val = str(int(time.time() * 1000) % 100)
-                    sender.send(MOVE + ":" + random_move_val)
+                    if AUTO_TEST_INSTRUCTION: 
+                        random_move_val = str(int(time.time() * 1000) % 100)
+                        sender.send(MOVE + ":" + random_move_val)
                 else:
                     # if for some reason the ESP is not ready, we keep sending the query state message
                     time.sleep(0.1)
-                    sender.send(QUERY_STATE)
+                    if AUTO_TEST_INSTRUCTION: 
+                        sender.send(QUERY_STATE)
             
     except KeyboardInterrupt:
         print("exiting...")

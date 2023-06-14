@@ -4,7 +4,7 @@ import time
 
 class WebSocketClient:
 
-    def __init__(self, url = "ws://localhost:8080/", log_level=1):
+    def __init__(self, url = "ws://localhost:8080/", sender = None, log_level=1):
         #websocket.enableTrace(True)
         self.ws = websocket.WebSocketApp(url,
                                          on_open = self.on_open,
@@ -15,6 +15,7 @@ class WebSocketClient:
         self.ws_thread = threading.Thread(target=self.start_receiving)
         self.is_stopped = False
         self.log_level = log_level
+        self.sender = sender
 
     def start(self):
         self.ws_thread.start()
@@ -26,7 +27,7 @@ class WebSocketClient:
             try:
                 self.ws.run_forever()
             except websocket.WebSocketException:
-                if self.log_level > 0:
+                if self.log_level > 1:
                     print("PC_websocket_server.py: Failed to connect, retrying in 5 seconds...")
                 time.sleep(5)
 
@@ -35,8 +36,24 @@ class WebSocketClient:
             print(f"PC_websocket_server.py: Received message => {message}")
         self.send_data_to_esp32(message)
 
+    def decode_web_command(self, data):
+        if "forward" in data:
+            return "MOVE:1"
+        if "backward" in data:
+            return "SEND_IMAGE"
+        if "left" in data:
+            return "ROTATE:-1"
+        if "right" in data:
+            return "ROTATE:-1"
+        
+        if self.log_level > 0:
+            print("websocket client - ERROR: no matching command for " + data)
+            return data
+
+
     def send_data_to_esp32(self, data):
-        ...
+        if self.sender is not None:
+            self.sender.send(self.decode_web_command(data))
 
     def on_error(self, ws, error):
         if self.log_level > 0:

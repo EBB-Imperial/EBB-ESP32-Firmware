@@ -16,7 +16,7 @@ class TCPSender:
     def send(self, message):
         message += '\n'
         self.client_socket.send(message.encode())
-        if self.log_level > 0: print(f"Message sent: {message}")
+        if self.log_level > 0: print(f"Sender.py: Message sent to ESP32: {message}")
 
     def disconnect(self):
         try:
