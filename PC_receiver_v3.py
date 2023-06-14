@@ -31,6 +31,10 @@ class TCPReceiver:
         if (self.log_level > 0): print("receiver.py: stopping process...")
         self.process.terminate()
         if (self.log_level): print("receiver.py: process terminated.")
+        try:
+            self.socket.close()
+        except Exception as e:
+            ...
 
     def run(self):
 

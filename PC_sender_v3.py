@@ -8,9 +8,9 @@ class TCPSender:
         self.client_socket = socket
 
     def start(self):
-        if self.client_socket is None:
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect((self.server_ip, self.server_port))
+        # if self.client_socket is None:
+        #     self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #     self.client_socket.connect((self.server_ip, self.server_port))
         if self.log_level > 0: print(f"Sender.py: Connected to server at {self.server_ip}:{self.server_port}")
 
     def send(self, message):
@@ -19,8 +19,11 @@ class TCPSender:
         if self.log_level > 0: print(f"Message sent: {message}")
 
     def disconnect(self):
-        self.client_socket.close()
-        if self.log_level > 0: print(f"Disconnected from server")
+        try:
+            self.client_socket.close()
+            if self.log_level > 0: print(f"Disconnected from server")
+        except Exception as e:
+            ...
 
 if __name__ == "__main__":
     server_ip = '192.168.4.1'  # Replace with your ESP32 IP address

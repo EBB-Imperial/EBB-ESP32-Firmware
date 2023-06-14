@@ -87,7 +87,7 @@ def main():
                     if LOG_LEVEL > 0:
                         print("main.py: received IMAGE_SENT message from ESP")
                     random_move_val = str(int(time.time() * 1000) % 100)
-                    sender.send(MOVE + ":" + random_move_val + "\n")
+                    sender.send(MOVE + ":" + random_move_val)
                 else:
                     # if for some reason the ESP is not ready, we keep sending the query state message
                     time.sleep(0.1)

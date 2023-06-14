@@ -194,6 +194,12 @@ void loop()
     if (client)
     {
         Serial.println("New client connected");
+        // kick out all previous clients
+        for (size_t i = 0; i < clients.size(); i++) {
+            clients[i].stop();
+            clients.erase(clients.begin() + i);
+            i--;  // adjust index after removing element
+        }
         clients.push_back(client);
     }
 
