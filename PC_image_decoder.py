@@ -7,11 +7,10 @@ from tqdm import tqdm
 class ImageDecoder:
 
     def __init__(self, receiver, img_width=320, img_height=236, img_folder="images",
-                 sync_word=b"UUUUUUUUUUUUUUUw", use_sim_input=False, delete_old_images=True, log_level=1):
+                use_sim_input=False, delete_old_images=True, log_level=1):
 
         self.IMG_WIDTH = img_width
         self.IMG_HEIGHT = img_height
-        self.SYNC_WORD = sync_word
         self.IMG_FOLDER = img_folder
         self.USE_SIM_INPUT = use_sim_input
         self.DELETE_OLD_IMAGES = delete_old_images

@@ -1,6 +1,5 @@
-from PC_receiver_v1 import TCPReceiver
-from PC_receiver_v2 import UDPReceiver
-from PC_sender_v2 import UDPSender
+from PC_receiver_v3 import TCPReceiver
+from PC_sender_v3 import TCPSender
 from PC_input_simulator import UDPReceiverSimulator
 from PC_image_decoder import ImageDecoder
 from PC_websocket_client import WebSocketClient
@@ -22,7 +21,6 @@ LOG_LEVEL = 3
 
 # image decoder
 USE_SIM_INPUT = False
-USE_SIM_UDP = False
 SAVE_RECORD = False
 DELETE_OLD_IMAGES = True
 IMG_FOLDER = "images"
@@ -31,47 +29,69 @@ IMG_HEIGHT = 235
 SYNC_WORD = b"UUUUUUUUUUUUUUUw"
 
 # URAT receiver
-ESP_IP = "192.168.4.255"  # sending ip
+ESP_IP = "192.168.4.1"  # sending ip
 ESP_PORT = 1234         # sending port
-UDP_IP = "192.168.4.1"             # receiving ip (currently set to boardcast)
-UDP_PORT = ESP_PORT     # receiving port
+TCP_IP = "192.168.4.1"  # receiving ip
+TCP_PORT = ESP_PORT     # receiving port
 
 # websocket client
 LOCAL_SERVER_URL = "ws://localhost:8080/"
+
+# esp32 instructions
+# sending data
+SEND_IMAGE = "SEND_IMAGE"
+SEND_SENSOR_DATA = "SEND_SENSOR_DATA"
+# move command
+MOVE = "MOVE"
+ROTATE = "ROTATE"
+# query state
+QUERY_STATE = "QUERY_STATE"
 # -------------------------------------------------------- #
 
 
 def main():
 
     if USE_SIM_INPUT:
-        receiver = UDPReceiverSimulator(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL)
+        receiver = UDPReceiverSimulator(ip=TCP_IP, port=TCP_PORT, log_level=LOG_LEVEL)
     else:
-        receiver = TCPReceiver(ip=UDP_IP, port=UDP_PORT, log_level=LOG_LEVEL, record_mode=SAVE_RECORD)
+        receiver = TCPReceiver(ip=TCP_IP, port=TCP_PORT, log_level=LOG_LEVEL, record_mode=SAVE_RECORD)
 
     decoder = ImageDecoder(receiver, img_width=IMG_WIDTH, img_height=IMG_HEIGHT, img_folder=IMG_FOLDER,
-                           sync_word=SYNC_WORD, use_sim_input=USE_SIM_INPUT, delete_old_images=DELETE_OLD_IMAGES,
+                           use_sim_input=USE_SIM_INPUT, delete_old_images=DELETE_OLD_IMAGES,
                             log_level=LOG_LEVEL)
     
-    sender = UDPSender(dst_ip=ESP_IP, dst_port=ESP_PORT, log_level=0, test_mode=USE_SIM_INPUT)
-
     socket_client = WebSocketClient(url=LOCAL_SERVER_URL, log_level=0)
 
     receiver.start()
     decoder.start()
     socket_client.start()
 
-    # self test on UDP
-    if USE_SIM_UDP:
-        sender.self_test()
+    sender = TCPSender(server_ip=ESP_IP, server_port=ESP_PORT, socket=receiver.socket, log_level=LOG_LEVEL)
+
+    sender.start()
+
+    sender.send(QUERY_STATE)
 
 
     try:
         # Main loop
         while True:
-            # testing
-            
-            #sender.send_data(b"**data**")
-            time.sleep(1)  # Pause for a while
+            for esp_data in receiver.get_esp_status_stream():
+                if esp_data.ready:
+                    if LOG_LEVEL > 0:
+                        print("main.py: received READY message from ESP")
+                    sender.send(SEND_IMAGE)
+                elif esp_data.image_sent:
+                    # TODO: call image processing script
+                    # for testing purpose, we send a random move instruction (e.g. MOVE:1 or ROTATE:10)
+                    if LOG_LEVEL > 0:
+                        print("main.py: received IMAGE_SENT message from ESP")
+                    random_move_val = str(int(time.time() * 1000) % 100)
+                    sender.send(MOVE + ":" + random_move_val + "\n")
+                else:
+                    # if for some reason the ESP is not ready, we keep sending the query state message
+                    time.sleep(0.1)
+                    sender.send(QUERY_STATE)
             
     except KeyboardInterrupt:
         print("exiting...")

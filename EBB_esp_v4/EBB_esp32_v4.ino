@@ -1,14 +1,23 @@
 #include "WiFi.h"
 #include <vector>
+#include <SoftwareSerial.h>
+#include <string>
 
 // ------------------ TCP ------------------
 #define TCP_PORT 1234
 #define UDP_PACKET_SIZE 1027   // we send this much data in each packet
 
 // ------------------ TCP Instructions ------------------
+// picture headers
 #define TCP_START_HEADER 0x2727282829292A2A
 #define TCP_ABORT_HEADER 0x4747484849494A4A
 #define TCP_IMAGE_FINISH 0x6767686869696A6A
+
+// instructions to pc headers
+#define TCP_PC_INITIALIZED 0x8A8B8C8D8E8F9090
+#define TCP_PC_READY 0x8A8B8C8D8E8F9191
+#define TCP_PC_IMAGE_SENT 0x8A8B8C8D8E8F9292
+#define TCP_PC_NOT_READY 0x8A8B8C8D8E8F9393
 
 // ------------------ UDP Headers ------------------
 #define UDP_HEADER_SIZE 24          // three bytes for header
@@ -35,8 +44,14 @@
 #define RXD2 16
 #define TXD2 17
 
+// ------------------ Soft serial ------------------
+#define RXD3 12
+#define TXD3 14
+#define SOFT_SERIAL_BAUD 115200
+
 // ------------------------------------------
 
+SoftwareSerial Serial3(RXD3, TXD3);
 
 const char* ssid = "EBB_esp32_v1_AP";
 const char* password = "EBBBBBBB";
@@ -46,8 +61,13 @@ WiFiServer server(TCP_PORT);
 uint8_t buffer[URAT_BUFFER_SIZE];
 size_t request_count = 0;
 
-
 std::vector<WiFiClient> clients;
+
+bool is_moving = false; // if true, we will not send images to clients
+
+// message received from clients
+String PC_message = "";
+int decoded_result = 0;
 
 // ------------------ Main ------------------
 
@@ -70,6 +90,8 @@ void setup()
     Serial2.setTimeout(URAT_TIMEOUT);
     Serial.println("UART Initialized");
 
+    Serial3.begin(SOFT_SERIAL_BAUD);
+
     WiFi.softAP(ssid, password);
     IPAddress IP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
@@ -82,6 +104,10 @@ void setup()
     Serial2.write(URAT_INSTRUCTION_RESET);
     state = FPGA_Comm_State::Resetting;
     Serial.println("FPGA_Comm_State: RESET");
+
+    // send initialized and ready message to all clients
+    boardcast_message(TCP_PC_INITIALIZED);
+    boardcast_message(TCP_PC_READY);
 }
 
 
@@ -99,6 +125,65 @@ void boardcast_message(uint64_t message)
     {
         clients[i].write((uint8_t*)&message, 8);
     }
+}
+
+
+int decode_PC_message(String message)
+{
+    // seperate the command into the command name and the command value
+    int command_index = message.indexOf(':');
+    String command_name = message;
+    String command_value = "";
+    if (command_index != -1)
+    {
+        command_name = message.substring(0, command_index);
+        command_value = message.substring(command_index + 1);
+    }
+
+    // execute the command
+    if (command_name == "MOVE")
+    {
+        Serial.println("MOVE command received with value: " + command_value);
+        // simulate moving
+        delay(1000);
+        is_moving = false;
+
+        // send ready message to all clients
+        boardcast_message(TCP_PC_READY);
+    }
+    else if (command_name == "ROTATE")
+    {
+        Serial.println("ROTATE command received with value: " + command_value);
+    }
+    else if (command_name == "SEND_IMAGE")
+    {
+        Serial.println("SEND_IMAGE command received with value: " + command_value);
+        return 1;
+    }
+    else if (command_name == "SEND_SENSOR_DATA")
+    {
+        Serial.println("SEND_SENSOR_DATA command received with value: " + command_value);
+    }
+    else if (command_name == "QUERY_STATE")
+    {
+        Serial.println("QUERY_STATE command received with value: " + command_value);
+        switch (state)
+        {
+        case FPGA_Comm_State::Idle:
+            boardcast_message(TCP_PC_READY);
+            break;
+        
+        default:
+            boardcast_message(TCP_PC_NOT_READY);
+            break;
+        }
+    }
+    else
+    {
+        Serial.println("ERROR: Unknown command received: " + command_name + " with value: " + command_value);
+    }
+
+    return 0;
 }
 
 
@@ -125,8 +210,34 @@ void loop()
     switch (state)
     {
         case FPGA_Comm_State::Idle:
-            // move to the Resetting state
-            state = FPGA_Comm_State::Resetting;
+            // move to the Resetting state to start sending images if we're not moving
+            // if (!is_moving)
+            //     state = FPGA_Comm_State::Resetting;
+
+            // read data from clients
+            for (size_t i = 0; i < clients.size(); i++) {
+                // check for incoming data
+                //PC_message = "";
+                while(clients[i].available() > 0) {
+                    char c = clients[i].read();
+                    if(c == '\n') {
+                        Serial.println("Received message: " + PC_message);
+                        decoded_result = decode_PC_message(PC_message);
+
+                        switch(decoded_result)
+                        {
+                            case 1:
+                                // send image to all clients
+                                state = FPGA_Comm_State::Resetting;
+                                Serial.println("FPGA_Comm_State: RESET");
+                                break;
+                        }
+                        PC_message = "";
+                    } else {
+                        PC_message += c;
+                    }
+                }
+            }
             break;
 
         case FPGA_Comm_State::Resetting:
@@ -154,6 +265,7 @@ void loop()
             {
                 // send finish message to all clients
                 boardcast_message(TCP_IMAGE_FINISH);
+                boardcast_message(TCP_PC_IMAGE_SENT);
 
                 state = FPGA_Comm_State::Idle;
                 Serial.println("FPGA_Comm_State: IDLE");

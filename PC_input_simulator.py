@@ -4,7 +4,7 @@ import time
 import math
 from tqdm import tqdm
 
-from PC_receiver_v2 import UDPReceiver, PictureData
+from obsolete.PC_receiver_v2 import UDPReceiver, PictureData
 
 RECORD_SIZE_LIMIT = 1024 * 512  # e.g. 0.5MB
 RECORDED_DATA_PATH = "recorded_inputs/image_with_header.txt"
