@@ -160,16 +160,16 @@ int decode_PC_message(String message)
     // execute the command
     if (command_name == "MOVE")
     {
-        // command for move is: 0x02 + distance value
-        uint8_t instruction[2] = {ESP_UART_INS_MOVE_STRAIGHT, (uint8_t)command_value.toInt()};
-        write_esp32_instruction(instruction, 2);
+        // command for move is: 0x02 + distance value, total 3 bytes
+        uint8_t instruction[3] = {ESP_UART_INS_MOVE_STRAIGHT, (uint8_t)(command_value.toInt() & 0xff), (uint8_t)((command_value.toInt() >> 8) & 0xff)};
+        write_esp32_instruction(instruction, 3);
         Serial.println("Sended move instruction: " + String(instruction[0]) + ", " + String(instruction[1]));
     }
     else if (command_name == "ROTATE")
     {
         // command for rotate is: 0x03 + angle value
-        uint8_t instruction[2] = {ESP_UART_INS_TURN, (uint8_t)command_value.toInt()};
-        write_esp32_instruction(instruction, 2);
+        uint8_t instruction[3] = {ESP_UART_INS_TURN, (uint8_t)(command_value.toInt() & 0xff), (uint8_t)((command_value.toInt() >> 8) & 0xff)};
+        write_esp32_instruction(instruction, 3);
         Serial.println("Sended rotate instruction: " + String(instruction[0]) + ", " + String(instruction[1]));
     }
     else if (command_name == "HCF")
