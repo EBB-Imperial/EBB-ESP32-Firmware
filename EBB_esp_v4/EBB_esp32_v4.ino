@@ -39,6 +39,13 @@
 // 2. Request next 15104 bytes of picture
 #define URAT_INSTRUCTION_REQUEST 0x01
 
+// ------------------ Controller-ESP URAT Instructions ------------------
+// instructions to send to the ESP
+#define ESP_UART_INS_HCF 0x00   // TODO: change to query of accelerometer and gyroscope reading
+#define ESP_UART_INS_STATUS 0x01
+#define ESP_UART_INS_MOVE_STRAIGHT 0x02
+#define ESP_UART_INS_TURN 0x03
+
 
 // ------------------ Pins ------------------
 #define RXD2 16
@@ -127,6 +134,16 @@ void boardcast_message(uint64_t message)
     }
 }
 
+void write_esp32_instruction(uint8_t instruction)
+{
+    Serial3.write(instruction);
+}
+
+void write_esp32_instruction(uint8_t* instruction, size_t size)
+{
+    Serial3.write(instruction, size);
+}
+
 
 int decode_PC_message(String message)
 {
@@ -143,30 +160,35 @@ int decode_PC_message(String message)
     // execute the command
     if (command_name == "MOVE")
     {
-        Serial.println("MOVE command received with value: " + command_value);
-        // simulate moving
-        delay(1000);
-        is_moving = false;
-
-        // send ready message to all clients
-        boardcast_message(TCP_PC_READY);
+        // command for move is: 0x02 + distance value
+        uint8_t instruction[2] = {ESP_UART_INS_MOVE_STRAIGHT, (uint8_t)command_value.toInt()};
+        write_esp32_instruction(instruction, 2);
+        Serial.println("Sended move instruction: " + String(instruction[0]) + ", " + String(instruction[1]));
     }
     else if (command_name == "ROTATE")
     {
-        Serial.println("ROTATE command received with value: " + command_value);
+        // command for rotate is: 0x03 + angle value
+        uint8_t instruction[2] = {ESP_UART_INS_TURN, (uint8_t)command_value.toInt()};
+        write_esp32_instruction(instruction, 2);
+        Serial.println("Sended rotate instruction: " + String(instruction[0]) + ", " + String(instruction[1]));
+    }
+    else if (command_name == "HCF")
+    {
+        // command for HCF is: 0x00
+        uint8_t instruction[1] = {ESP_UART_INS_HCF};
+        write_esp32_instruction(instruction, 1);
+        Serial.println("Sended HCF instruction: " + String(instruction[0]));
     }
     else if (command_name == "SEND_IMAGE")
     {
-        Serial.println("SEND_IMAGE command received with value: " + command_value);
-        return 1;
+        return 1;   // 1 means ready to send image
     }
     else if (command_name == "SEND_SENSOR_DATA")
     {
-        Serial.println("SEND_SENSOR_DATA command received with value: " + command_value);
+        // TODO
     }
     else if (command_name == "QUERY_STATE")
     {
-        Serial.println("QUERY_STATE command received with value: " + command_value);
         switch (state)
         {
         case FPGA_Comm_State::Idle:
@@ -216,9 +238,23 @@ void loop()
     switch (state)
     {
         case FPGA_Comm_State::Idle:
-            // move to the Resetting state to start sending images if we're not moving
-            // if (!is_moving)
-            //     state = FPGA_Comm_State::Resetting;
+            // pool data from esp32
+            write_esp32_instruction(ESP_UART_INS_STATUS);
+            if (Serial3.available() > 0)
+            {
+                uint8_t c = Serial3.read();
+                if (c == 0x01)  // TODO: is this the right value?
+                {
+                    Serial.println("ESP32 is moving");
+                    is_moving = true;
+                }
+                else
+                {
+                    is_moving = false;
+                    // send ready message to all clients
+                    boardcast_message(TCP_PC_READY);
+                }
+            }
 
             // read data from clients
             for (size_t i = 0; i < clients.size(); i++) {
@@ -275,6 +311,13 @@ void loop()
 
                 state = FPGA_Comm_State::Idle;
                 Serial.println("FPGA_Comm_State: IDLE");
+                break;
+            }
+
+            // check if we are moving, if so skip this loop
+            if (is_moving)
+            {
+                Serial.println("ESP32 is moving, skipping request");
                 break;
             }
 
